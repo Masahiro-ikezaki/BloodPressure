@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>血圧・脈拍管理</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --primary: #667eea;
+  --primary-dark: #5a67d8;
+  --danger: #e53e3e;
+  --warning: #ed8936;
+  --success: #38a169;
+  --bg: #f7fafc;
+  --card: #ffffff;
+  --text: #2d3748;
+  --text-light: #718096;
+  --border: #e2e8f0;
+  --tab-height: 56px;
+  --header-height: 52px;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ヘッダー */
+.header {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: var(--header-height);
+  background: var(--primary);
+  color: #fff;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px;
+  z-index: 100;
+  box-shadow: 0 2px 4px rgba(0,0,0,.1);
+}
+.header h1 { font-size: 16px; font-weight: 600; }
+.header select {
+  background: rgba(255,255,255,.2);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.4);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.header select option { color: var(--text); background: #fff; }
+
+/* タブバー */
+.tab-bar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  height: var(--tab-height);
+  background: var(--card);
+  display: flex;
+  border-top: 1px solid var(--border);
+  z-index: 100;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.tab-btn {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px;
+  background: none; border: none;
+  color: var(--text-light);
+  font-size: 10px;
+  cursor: pointer;
+  transition: color .2s;
+}
+.tab-btn.active { color: var(--primary); }
+.tab-btn svg { width: 24px; height: 24px; }
+
+/* コンテンツ */
+.content {
+  padding-top: var(--header-height);
+  padding-bottom: var(--tab-height);
+  min-height: 100dvh;
+}
+.tab-content { display: none; padding: 16px; }
+.tab-content.active { display: block; }
+
+/* 入力フォーム */
+.form-group { margin-bottom: 16px; }
+.form-label {
+  display: block;
+  font-size: 13px; font-weight: 600;
+  color: var(--text-light);
+  margin-bottom: 6px;
+}
+.form-input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 16px;
+  background: var(--card);
+  -webkit-appearance: none;
+}
+.form-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(102,126,234,.2); }
+
+.bp-inputs {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+}
+.bp-inputs .sep { font-size: 20px; color: var(--text-light); text-align: center; }
+.bp-input {
+  width: 100%;
+  padding: 14px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 24px;
+  font-weight: 700;
+  text-align: center;
+  background: var(--card);
+  -webkit-appearance: none;
+}
+.bp-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(102,126,234,.2); }
+.bp-unit { font-size: 11px; color: var(--text-light); text-align: center; margin-top: 2px; }
+
+.toggle-group { display: flex; gap: 8px; }
+.toggle-btn {
+  flex: 1;
+  padding: 10px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  font-size: 14px; font-weight: 600;
+  cursor: pointer;
+  transition: all .2s;
+  text-align: center;
+}
+.toggle-btn.active {
+  border-color: var(--primary);
+  background: rgba(102,126,234,.1);
+  color: var(--primary);
+}
+
+.btn-record {
+  width: 100%;
+  padding: 16px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: background .2s;
+}
+.btn-record:active { background: var(--primary-dark); }
+.btn-record:disabled { background: #a0aec0; cursor: not-allowed; }
+
+.recent-record {
+  margin-top: 20px;
+  padding: 12px;
+  background: var(--card);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+.recent-record h3 { font-size: 13px; color: var(--text-light); margin-bottom: 8px; }
+
+.validation-error {
+  color: var(--danger);
+  font-size: 12px;
+  margin-top: 4px;
+  display: none;
+}
+.validation-error.show { display: block; }
+
+/* 一覧カード */
+.record-card {
+  background: var(--card);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+.record-card-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 8px;
+}
+.record-date { font-size: 13px; color: var(--text-light); }
+.record-bp {
+  font-size: 22px; font-weight: 700;
+  color: var(--text);
+}
+.record-bp .slash { color: var(--text-light); font-weight: 400; }
+.record-details {
+  display: flex; gap: 12px; flex-wrap: wrap;
+  font-size: 13px; color: var(--text-light);
+  margin-top: 6px;
+}
+.record-actions {
+  display: flex; gap: 8px; margin-top: 10px;
+  justify-content: flex-end;
+}
+.btn-sm {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  font-size: 12px;
+  cursor: pointer;
+}
+.btn-sm.delete { color: var(--danger); border-color: var(--danger); }
+
+.list-toolbar {
+  display: flex; justify-content: flex-end; margin-bottom: 12px; gap: 8px;
+}
+.btn-action {
+  padding: 8px 16px;
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--primary);
+  font-size: 13px; font-weight: 600;
+  cursor: pointer;
+}
+
+/* グラフ */
+.chart-container {
+  background: var(--card);
+  border-radius: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+}
+.period-selector {
+  display: flex; gap: 8px; margin-bottom: 12px;
+}
+.period-btn {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: center;
+}
+.period-btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+.no-data-msg {
+  text-align: center;
+  color: var(--text-light);
+  padding: 40px 0;
+  font-size: 14px;
+}
+
+/* 設定 */
+.setting-section {
+  background: var(--card);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+}
+.setting-section h3 {
+  font-size: 15px; font-weight: 600;
+  margin-bottom: 12px;
+}
+.user-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.user-item:last-child { border-bottom: none; }
+.user-color {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+.add-user-form { display: flex; gap: 8px; margin-top: 10px; }
+.add-user-form input { flex: 1; }
+.add-user-form input[type="color"] { flex: 0; width: 44px; padding: 4px; }
+
+.storage-info {
+  font-size: 13px;
+  color: var(--text-light);
+}
+
+.btn-full {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--primary);
+  font-size: 14px; font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+.btn-full.danger { color: var(--danger); border-color: var(--danger); }
+
+/* モーダル */
+.modal-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.5);
+  z-index: 200;
+  align-items: center; justify-content: center;
+  padding: 16px;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 24px;
+  width: 100%;
+  max-width: 400px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.modal h3 { margin-bottom: 16px; }
+.modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+.modal-actions button { flex: 1; padding: 10px; border-radius: 8px; font-size: 14px; cursor: pointer; }
+.modal-actions .cancel { background: var(--card); border: 1px solid var(--border); }
+.modal-actions .confirm { background: var(--primary); color: #fff; border: none; }
+.modal-actions .confirm.danger { background: var(--danger); }
+
+/* トースト */
+.toast {
+  position: fixed;
+  top: calc(var(--header-height) + 8px);
+  left: 50%; transform: translateX(-50%);
+  background: #2d3748;
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  z-index: 300;
+  opacity: 0;
+  transition: opacity .3s;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; }
+
+/* BP値の色分け */
+.bp-normal { color: var(--success); }
+.bp-high { color: var(--warning); }
+.bp-very-high { color: var(--danger); }
+
+/* 編集モーダルの日時入力 */
+.datetime-input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+@media (min-width: 600px) {
+  .content { max-width: 480px; margin: 0 auto; }
+}
+</style>
+</head>
+<body>
+
+<!-- ヘッダー -->
+<header class="header">
+  <h1>血圧・脈拍管理</h1>
+  <select id="userSelect"></select>
+</header>
+
+<!-- トースト -->
+<div class="toast" id="toast"></div>
+
+<!-- コンテンツ -->
+<main class="content">
+
+  <!-- 入力タブ -->
+  <section class="tab-content active" id="tab-input">
+    <div class="form-group">
+      <label class="form-label">日時</label>
+      <input type="datetime-local" class="form-input" id="inputDatetime">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">血圧・脈拍</label>
+      <div class="bp-inputs">
+        <div>
+          <input type="number" class="bp-input" id="inputSystolic" inputmode="numeric" placeholder="128">
+          <div class="bp-unit">上 mmHg</div>
+        </div>
+        <div class="sep">/</div>
+        <div>
+          <input type="number" class="bp-input" id="inputDiastolic" inputmode="numeric" placeholder="82">
+          <div class="bp-unit">下 mmHg</div>
+        </div>
+        <div class="sep"></div>
+        <div>
+          <input type="number" class="bp-input" id="inputPulse" inputmode="numeric" placeholder="72">
+          <div class="bp-unit">脈拍 bpm</div>
+        </div>
+      </div>
+      <div class="validation-error" id="bpError"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">測定腕</label>
+      <div class="toggle-group" id="armToggle">
+        <button type="button" class="toggle-btn active" data-value="left">左腕</button>
+        <button type="button" class="toggle-btn" data-value="right">右腕</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">服装</label>
+      <div class="toggle-group" id="clothedToggle">
+        <button type="button" class="toggle-btn active" data-value="false">薄着</button>
+        <button type="button" class="toggle-btn" data-value="true">着衣</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">メモ</label>
+      <input type="text" class="form-input" id="inputMemo" placeholder="例: 起床後、食後 など">
+    </div>
+
+    <button class="btn-record" id="btnRecord">記録する</button>
+
+    <div class="recent-record" id="recentRecord" style="display:none">
+      <h3>直近の記録</h3>
+      <div id="recentContent"></div>
+    </div>
+  </section>
+
+  <!-- グラフタブ -->
+  <section class="tab-content" id="tab-chart">
+    <div class="period-selector" id="periodSelector">
+      <button class="period-btn active" data-days="7">7日</button>
+      <button class="period-btn" data-days="30">30日</button>
+      <button class="period-btn" data-days="90">90日</button>
+    </div>
+    <div class="chart-container">
+      <canvas id="bpChart"></canvas>
+      <div class="no-data-msg" id="chartNoData" style="display:none">データがありません</div>
+    </div>
+  </section>
+
+  <!-- 一覧タブ -->
+  <section class="tab-content" id="tab-list">
+    <div class="list-toolbar">
+      <button class="btn-action" id="btnCsvExport">CSV出力</button>
+    </div>
+    <div id="recordList"></div>
+    <div class="no-data-msg" id="listNoData" style="display:none">記録がありません</div>
+  </section>
+
+  <!-- 設定タブ -->
+  <section class="tab-content" id="tab-settings">
+    <div class="setting-section">
+      <h3>ユーザー管理</h3>
+      <div id="userList"></div>
+      <div class="add-user-form">
+        <input type="text" class="form-input" id="newUserName" placeholder="名前">
+        <input type="color" class="form-input" id="newUserColor" value="#667eea">
+        <button class="btn-sm" id="btnAddUser">追加</button>
+      </div>
+    </div>
+
+    <div class="setting-section">
+      <h3>データバックアップ</h3>
+      <button class="btn-full" id="btnExportJson">JSONエクスポート</button>
+      <button class="btn-full" id="btnImportJson">JSONインポート</button>
+      <input type="file" id="fileImport" accept=".json" style="display:none">
+    </div>
+
+    <div class="setting-section">
+      <h3>ストレージ</h3>
+      <div class="storage-info" id="storageInfo"></div>
+    </div>
+  </section>
+</main>
+
+<!-- タブバー -->
+<nav class="tab-bar">
+  <button class="tab-btn active" data-tab="tab-input">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+    入力
+  </button>
+  <button class="tab-btn" data-tab="tab-chart">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    グラフ
+  </button>
+  <button class="tab-btn" data-tab="tab-list">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+    一覧
+  </button>
+  <button class="tab-btn" data-tab="tab-settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    設定
+  </button>
+</nav>
+
+<!-- 編集モーダル -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <h3>記録を編集</h3>
+    <div class="form-group">
+      <label class="form-label">日時</label>
+      <input type="datetime-local" class="datetime-input" id="editDatetime">
+    </div>
+    <div class="form-group">
+      <label class="form-label">収縮期血圧 (mmHg)</label>
+      <input type="number" class="form-input" id="editSystolic" inputmode="numeric">
+    </div>
+    <div class="form-group">
+      <label class="form-label">拡張期血圧 (mmHg)</label>
+      <input type="number" class="form-input" id="editDiastolic" inputmode="numeric">
+    </div>
+    <div class="form-group">
+      <label class="form-label">脈拍 (bpm)</label>
+      <input type="number" class="form-input" id="editPulse" inputmode="numeric">
+    </div>
+    <div class="form-group">
+      <label class="form-label">測定腕</label>
+      <div class="toggle-group" id="editArmToggle">
+        <button type="button" class="toggle-btn" data-value="left">左腕</button>
+        <button type="button" class="toggle-btn" data-value="right">右腕</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">服装</label>
+      <div class="toggle-group" id="editClothedToggle">
+        <button type="button" class="toggle-btn" data-value="false">薄着</button>
+        <button type="button" class="toggle-btn" data-value="true">着衣</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">メモ</label>
+      <input type="text" class="form-input" id="editMemo">
+    </div>
+    <div class="validation-error" id="editError"></div>
+    <div class="modal-actions">
+      <button class="cancel" id="editCancel">キャンセル</button>
+      <button class="confirm" id="editSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 削除確認モーダル -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal">
+    <h3>記録を削除しますか？</h3>
+    <p style="color:var(--text-light);font-size:14px">この操作は取り消せません。</p>
+    <div class="modal-actions">
+      <button class="cancel" id="deleteCancel">キャンセル</button>
+      <button class="confirm danger" id="deleteConfirm">削除</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// データ管理
+const STORAGE_KEY = 'bp-app-data';
+const DEFAULT_COLORS = ['#667eea', '#ed8936', '#38a169', '#e53e3e'];
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) { /* 破損データ対策 */ }
+  return { users: [], records: [] };
+}
+
+function saveData(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+function generateId(prefix) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+let appData = loadData();
+let currentUserId = null;
+let editingRecordId = null;
+let deletingRecordId = null;
+let bpChart = null;
+
+// 初期ユーザーがなければ作成
+if (appData.users.length === 0) {
+  appData.users.push({ id: generateId('user'), name: 'ユーザー1', color: DEFAULT_COLORS[0] });
+  saveData(appData);
+}
+currentUserId = appData.users[0].id;
+
+// ユーザーセレクト更新
+function updateUserSelect() {
+  const sel = document.getElementById('userSelect');
+  sel.innerHTML = appData.users.map(u =>
+    `<option value="${u.id}" ${u.id === currentUserId ? 'selected' : ''}>${u.name}</option>`
+  ).join('');
+}
+
+document.getElementById('userSelect').addEventListener('change', (e) => {
+  currentUserId = e.target.value;
+  refreshAll();
+});
+
+// タブ切替
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'tab-chart') renderChart();
+    if (btn.dataset.tab === 'tab-list') renderList();
+    if (btn.dataset.tab === 'tab-settings') renderSettings();
+  });
+});
+
+// トグルボタン共通
+function setupToggle(containerId) {
+  const container = document.getElementById(containerId);
+  container.querySelectorAll('.toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      container.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+}
+setupToggle('armToggle');
+setupToggle('clothedToggle');
+
+function getToggleValue(containerId) {
+  const active = document.querySelector(`#${containerId} .toggle-btn.active`);
+  return active ? active.dataset.value : null;
+}
+
+function setToggleValue(containerId, value) {
+  const container = document.getElementById(containerId);
+  container.querySelectorAll('.toggle-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.value === String(value));
+  });
+}
+
+// 日時初期化
+function setCurrentDatetime() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset();
+  const local = new Date(now.getTime() - offset * 60000);
+  document.getElementById('inputDatetime').value = local.toISOString().slice(0, 16);
+}
+setCurrentDatetime();
+
+// バリデーション
+function validate(sys, dia, pulse) {
+  const errors = [];
+  if (!sys || sys < 60 || sys > 250) errors.push('収縮期血圧は60〜250の範囲で入力');
+  if (!dia || dia < 40 || dia > 150) errors.push('拡張期血圧は40〜150の範囲で入力');
+  if (sys && dia && dia >= sys) errors.push('拡張期血圧は収縮期血圧より小さくしてください');
+  if (!pulse || pulse < 30 || pulse > 200) errors.push('脈拍は30〜200の範囲で入力');
+  return errors;
+}
+
+// トースト表示
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// BP値の色分けクラス
+function bpClass(sys) {
+  if (sys >= 160) return 'bp-very-high';
+  if (sys >= 135) return 'bp-high';
+  return 'bp-normal';
+}
+
+// 記録ボタン
+document.getElementById('btnRecord').addEventListener('click', () => {
+  const sys = parseInt(document.getElementById('inputSystolic').value);
+  const dia = parseInt(document.getElementById('inputDiastolic').value);
+  const pulse = parseInt(document.getElementById('inputPulse').value);
+  const errors = validate(sys, dia, pulse);
+  const errorEl = document.getElementById('bpError');
+
+  if (errors.length > 0) {
+    errorEl.textContent = errors.join('、');
+    errorEl.classList.add('show');
+    return;
+  }
+  errorEl.classList.remove('show');
+
+  const record = {
+    id: generateId('rec'),
+    userId: currentUserId,
+    timestamp: document.getElementById('inputDatetime').value,
+    systolic: sys,
+    diastolic: dia,
+    pulse: pulse,
+    arm: getToggleValue('armToggle'),
+    clothed: getToggleValue('clothedToggle') === 'true',
+    memo: document.getElementById('inputMemo').value.trim()
+  };
+
+  appData.records.push(record);
+  saveData(appData);
+
+  // フォームリセット
+  document.getElementById('inputSystolic').value = '';
+  document.getElementById('inputDiastolic').value = '';
+  document.getElementById('inputPulse').value = '';
+  document.getElementById('inputMemo').value = '';
+  setCurrentDatetime();
+
+  showToast('記録しました');
+  showRecentRecord();
+});
+
+// 直近の記録表示
+function showRecentRecord() {
+  const userRecords = appData.records
+    .filter(r => r.userId === currentUserId)
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+  const container = document.getElementById('recentRecord');
+  const content = document.getElementById('recentContent');
+
+  if (userRecords.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+  container.style.display = 'block';
+  const r = userRecords[0];
+  const dt = new Date(r.timestamp);
+  const dateStr = `${dt.getMonth()+1}/${dt.getDate()} ${dt.getHours()}:${String(dt.getMinutes()).padStart(2,'0')}`;
+  content.innerHTML = `
+    <span class="${bpClass(r.systolic)}" style="font-size:20px;font-weight:700">${r.systolic}/${r.diastolic}</span>
+    <span style="font-size:16px;margin-left:8px">♥ ${r.pulse}</span>
+    <span style="font-size:13px;color:var(--text-light);margin-left:8px">${dateStr} ${r.arm === 'left' ? '左' : '右'}腕 ${r.clothed ? '着衣' : '薄着'}</span>
+    ${r.memo ? `<div style="font-size:13px;color:var(--text-light);margin-top:4px">${escapeHtml(r.memo)}</div>` : ''}
+  `;
+}
+
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+// 一覧表示
+function renderList() {
+  const userRecords = appData.records
+    .filter(r => r.userId === currentUserId)
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+  const container = document.getElementById('recordList');
+  const noData = document.getElementById('listNoData');
+
+  if (userRecords.length === 0) {
+    container.innerHTML = '';
+    noData.style.display = 'block';
+    return;
+  }
+  noData.style.display = 'none';
+
+  container.innerHTML = userRecords.map(r => {
+    const dt = new Date(r.timestamp);
+    const dateStr = `${dt.getFullYear()}/${dt.getMonth()+1}/${dt.getDate()} ${dt.getHours()}:${String(dt.getMinutes()).padStart(2,'0')}`;
+    return `
+      <div class="record-card">
+        <div class="record-card-header">
+          <span class="record-date">${dateStr}</span>
+        </div>
+        <div class="record-bp ${bpClass(r.systolic)}">${r.systolic}<span class="slash"> / </span>${r.diastolic} <span style="font-size:14px;font-weight:400">mmHg</span></div>
+        <div class="record-details">
+          <span>♥ ${r.pulse} bpm</span>
+          <span>${r.arm === 'left' ? '左' : '右'}腕</span>
+          <span>${r.clothed ? '着衣' : '薄着'}</span>
+          ${r.memo ? `<span>📝 ${escapeHtml(r.memo)}</span>` : ''}
+        </div>
+        <div class="record-actions">
+          <button class="btn-sm" onclick="openEditModal('${r.id}')">編集</button>
+          <button class="btn-sm delete" onclick="openDeleteModal('${r.id}')">削除</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// 編集モーダル
+function openEditModal(id) {
+  editingRecordId = id;
+  const r = appData.records.find(rec => rec.id === id);
+  if (!r) return;
+
+  document.getElementById('editDatetime').value = r.timestamp;
+  document.getElementById('editSystolic').value = r.systolic;
+  document.getElementById('editDiastolic').value = r.diastolic;
+  document.getElementById('editPulse').value = r.pulse;
+  setupToggle('editArmToggle');
+  setupToggle('editClothedToggle');
+  setToggleValue('editArmToggle', r.arm);
+  setToggleValue('editClothedToggle', String(r.clothed));
+  document.getElementById('editMemo').value = r.memo || '';
+  document.getElementById('editError').classList.remove('show');
+  document.getElementById('editModal').classList.add('show');
+}
+
+document.getElementById('editCancel').addEventListener('click', () => {
+  document.getElementById('editModal').classList.remove('show');
+});
+
+document.getElementById('editSave').addEventListener('click', () => {
+  const sys = parseInt(document.getElementById('editSystolic').value);
+  const dia = parseInt(document.getElementById('editDiastolic').value);
+  const pulse = parseInt(document.getElementById('editPulse').value);
+  const errors = validate(sys, dia, pulse);
+  const errorEl = document.getElementById('editError');
+
+  if (errors.length > 0) {
+    errorEl.textContent = errors.join('、');
+    errorEl.classList.add('show');
+    return;
+  }
+
+  const idx = appData.records.findIndex(r => r.id === editingRecordId);
+  if (idx === -1) return;
+
+  appData.records[idx] = {
+    ...appData.records[idx],
+    timestamp: document.getElementById('editDatetime').value,
+    systolic: sys,
+    diastolic: dia,
+    pulse: pulse,
+    arm: getToggleValue('editArmToggle'),
+    clothed: getToggleValue('editClothedToggle') === 'true',
+    memo: document.getElementById('editMemo').value.trim()
+  };
+  saveData(appData);
+  document.getElementById('editModal').classList.remove('show');
+  showToast('更新しました');
+  renderList();
+  showRecentRecord();
+});
+
+// 削除モーダル
+function openDeleteModal(id) {
+  deletingRecordId = id;
+  document.getElementById('deleteModal').classList.add('show');
+}
+
+document.getElementById('deleteCancel').addEventListener('click', () => {
+  document.getElementById('deleteModal').classList.remove('show');
+});
+
+document.getElementById('deleteConfirm').addEventListener('click', () => {
+  appData.records = appData.records.filter(r => r.id !== deletingRecordId);
+  saveData(appData);
+  document.getElementById('deleteModal').classList.remove('show');
+  showToast('削除しました');
+  renderList();
+  showRecentRecord();
+});
+
+// グラフ
+let chartPeriod = 7;
+
+document.getElementById('periodSelector').addEventListener('click', (e) => {
+  const btn = e.target.closest('.period-btn');
+  if (!btn) return;
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  chartPeriod = parseInt(btn.dataset.days);
+  renderChart();
+});
+
+function renderChart() {
+  const canvas = document.getElementById('bpChart');
+  const noData = document.getElementById('chartNoData');
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - chartPeriod * 24 * 60 * 60 * 1000);
+
+  const records = appData.records
+    .filter(r => r.userId === currentUserId && new Date(r.timestamp) >= cutoff)
+    .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+  if (records.length === 0) {
+    canvas.style.display = 'none';
+    noData.style.display = 'block';
+    if (bpChart) { bpChart.destroy(); bpChart = null; }
+    return;
+  }
+  canvas.style.display = 'block';
+  noData.style.display = 'none';
+
+  const labels = records.map(r => {
+    const d = new Date(r.timestamp);
+    return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
+  });
+
+  const user = appData.users.find(u => u.id === currentUserId);
+  const color = user ? user.color : '#667eea';
+
+  if (bpChart) bpChart.destroy();
+
+  bpChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: '収縮期 (上)',
+          data: records.map(r => r.systolic),
+          borderColor: color,
+          backgroundColor: color + '20',
+          tension: 0.3,
+          pointRadius: 3,
+        },
+        {
+          label: '拡張期 (下)',
+          data: records.map(r => r.diastolic),
+          borderColor: color + '99',
+          backgroundColor: color + '10',
+          tension: 0.3,
+          pointRadius: 3,
+        },
+        {
+          label: '脈拍',
+          data: records.map(r => r.pulse),
+          borderColor: '#e53e3e',
+          backgroundColor: '#e53e3e20',
+          tension: 0.3,
+          pointRadius: 3,
+          borderDash: [4, 4],
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 11 } } },
+        annotation: undefined
+      },
+      scales: {
+        x: {
+          ticks: { font: { size: 10 }, maxRotation: 45, maxTicksLimit: 8 }
+        },
+        y: {
+          min: 40,
+          max: 200,
+          ticks: { font: { size: 11 } }
+        }
+      }
+    },
+    plugins: [{
+      id: 'thresholdLines',
+      afterDraw(chart) {
+        const ctx = chart.ctx;
+        const yScale = chart.scales.y;
+        const xScale = chart.scales.x;
+
+        // 高血圧基準ライン 135/85
+        [135, 85].forEach(val => {
+          const y = yScale.getPixelForValue(val);
+          ctx.save();
+          ctx.beginPath();
+          ctx.setLineDash([6, 4]);
+          ctx.strokeStyle = '#e53e3e80';
+          ctx.lineWidth = 1;
+          ctx.moveTo(xScale.left, y);
+          ctx.lineTo(xScale.right, y);
+          ctx.stroke();
+          ctx.fillStyle = '#e53e3e80';
+          ctx.font = '10px sans-serif';
+          ctx.fillText(`${val}`, xScale.right + 4, y + 3);
+          ctx.restore();
+        });
+      }
+    }]
+  });
+}
+
+// CSVエクスポート
+document.getElementById('btnCsvExport').addEventListener('click', () => {
+  const userRecords = appData.records
+    .filter(r => r.userId === currentUserId)
+    .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+  if (userRecords.length === 0) {
+    showToast('エクスポートするデータがありません');
+    return;
+  }
+
+  const user = appData.users.find(u => u.id === currentUserId);
+  const header = '日時,収縮期血圧(mmHg),拡張期血圧(mmHg),脈拍(bpm),測定腕,服装,メモ';
+  const rows = userRecords.map(r => {
+    const dt = new Date(r.timestamp);
+    const dateStr = `${dt.getFullYear()}/${dt.getMonth()+1}/${dt.getDate()} ${dt.getHours()}:${String(dt.getMinutes()).padStart(2,'0')}`;
+    const memo = r.memo ? `"${r.memo.replace(/"/g, '""')}"` : '';
+    return `${dateStr},${r.systolic},${r.diastolic},${r.pulse},${r.arm === 'left' ? '左' : '右'},${r.clothed ? '着衣' : '薄着'},${memo}`;
+  });
+
+  const csv = '\uFEFF' + header + '\n' + rows.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `血圧記録_${user ? user.name : ''}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('CSVをダウンロードしました');
+});
+
+// 設定画面
+function renderSettings() {
+  const container = document.getElementById('userList');
+  container.innerHTML = appData.users.map(u => `
+    <div class="user-item">
+      <span><span class="user-color" style="background:${u.color}"></span>${escapeHtml(u.name)}</span>
+      <span>
+        ${appData.users.length > 1 ? `<button class="btn-sm delete" onclick="deleteUser('${u.id}')">削除</button>` : ''}
+      </span>
+    </div>
+  `).join('');
+
+  // ストレージ使用量
+  const raw = localStorage.getItem(STORAGE_KEY) || '';
+  const bytes = new Blob([raw]).size;
+  const kb = (bytes / 1024).toFixed(1);
+  const recordCount = appData.records.length;
+  document.getElementById('storageInfo').innerHTML =
+    `使用量: ${kb} KB / 記録数: ${recordCount}件`;
+}
+
+// ユーザー追加
+document.getElementById('btnAddUser').addEventListener('click', () => {
+  const name = document.getElementById('newUserName').value.trim();
+  if (!name) { showToast('名前を入力してください'); return; }
+  if (appData.users.length >= 5) { showToast('ユーザーは5名まで'); return; }
+
+  appData.users.push({
+    id: generateId('user'),
+    name: name,
+    color: document.getElementById('newUserColor').value
+  });
+  saveData(appData);
+  document.getElementById('newUserName').value = '';
+  updateUserSelect();
+  renderSettings();
+  showToast(`${name}を追加しました`);
+});
+
+// ユーザー削除
+function deleteUser(id) {
+  if (appData.users.length <= 1) { showToast('最低1名のユーザーが必要です'); return; }
+  const user = appData.users.find(u => u.id === id);
+  if (!confirm(`${user.name}と関連する記録をすべて削除しますか？`)) return;
+
+  appData.users = appData.users.filter(u => u.id !== id);
+  appData.records = appData.records.filter(r => r.userId !== id);
+  saveData(appData);
+
+  if (currentUserId === id) {
+    currentUserId = appData.users[0].id;
+  }
+  updateUserSelect();
+  renderSettings();
+  showToast('削除しました');
+}
+
+// JSONエクスポート
+document.getElementById('btnExportJson').addEventListener('click', () => {
+  const json = JSON.stringify(appData, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `bp-backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('バックアップをダウンロードしました');
+});
+
+// JSONインポート
+document.getElementById('btnImportJson').addEventListener('click', () => {
+  document.getElementById('fileImport').click();
+});
+
+document.getElementById('fileImport').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const imported = JSON.parse(ev.target.result);
+      if (!imported.users || !imported.records) {
+        showToast('無効なバックアップファイルです');
+        return;
+      }
+      if (!confirm('現在のデータを上書きしますか？')) return;
+      appData = imported;
+      saveData(appData);
+      currentUserId = appData.users[0]?.id;
+      updateUserSelect();
+      refreshAll();
+      showToast('インポートしました');
+    } catch (err) {
+      showToast('ファイルの読み込みに失敗しました');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+// 全体更新
+function refreshAll() {
+  showRecentRecord();
+  renderList();
+  renderChart();
+  renderSettings();
+}
+
+// 初期表示
+updateUserSelect();
+showRecentRecord();
+</script>
+</body>
+</html>

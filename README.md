@@ -4,7 +4,8 @@
 
 ## デモ
 
-https://masahiro-ikezaki.github.io/BloodPressure/
+- **血圧・脈拍管理アプリ**: https://masahiro-ikezaki.github.io/BloodPressure/
+- **BMI 体型チェッカー**: https://masahiro-ikezaki.github.io/BloodPressure/bmi-checker.html
 
 ## 機能
 

@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BMI 体型チェッカー</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&family=DM+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0f1e;
+    --surface: rgba(15, 25, 50, 0.85);
+    --border: #1e2d50;
+    --text: #c8d8f0;
+    --muted: #4a6080;
+    --accent1: #38bdf8;
+    --accent2: #818cf8;
+    --green: #34d399;
+    --yellow: #fbbf24;
+    --orange: #f97316;
+    --red: #ef4444;
+    --blue: #60a5fa;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    background-image:
+      radial-gradient(ellipse at 20% 20%, rgba(56,189,248,0.07) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 80%, rgba(129,140,248,0.07) 0%, transparent 60%);
+    font-family: 'Noto Sans JP', sans-serif;
+    color: var(--text);
+    min-height: 100vh;
+    padding: 32px 16px 48px;
+  }
+
+  .container { max-width: 760px; margin: 0 auto; }
+
+  .header { text-align: center; margin-bottom: 36px; }
+  .header-sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.35em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .header h1 {
+    font-size: clamp(28px, 6vw, 42px);
+    font-weight: 900;
+    background: linear-gradient(90deg, var(--accent1), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.1;
+  }
+  .header p { color: var(--muted); font-size: 13px; margin-top: 8px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 28px 24px;
+    margin-bottom: 20px;
+    backdrop-filter: blur(12px);
+  }
+
+  .input-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  .form-group label {
+    font-size: 11px;
+    color: var(--muted);
+    display: block;
+    margin-bottom: 7px;
+    letter-spacing: 0.05em;
+  }
+  .form-group input, .form-group select {
+    width: 100%;
+    background: rgba(10,15,30,0.8);
+    border: 1px solid #2a3a5a;
+    border-radius: 10px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-size: 18px;
+    font-weight: 700;
+    font-family: 'DM Mono', monospace;
+    outline: none;
+    transition: border-color 0.25s, box-shadow 0.25s;
+  }
+  .form-group select { font-size: 14px; cursor: pointer; }
+  .form-group input:focus, .form-group select:focus {
+    border-color: var(--accent1);
+    box-shadow: 0 0 0 3px rgba(56,189,248,0.12);
+  }
+
+  .gender-row { display: flex; gap: 10px; }
+  .gender-btn {
+    flex: 1; padding: 11px 0;
+    border-radius: 10px; cursor: pointer;
+    font-weight: 700; font-size: 14px;
+    font-family: 'Noto Sans JP', sans-serif;
+    transition: all 0.25s;
+    background: rgba(10,15,30,0.8);
+    color: var(--muted);
+    border: 1px solid #2a3a5a;
+  }
+  .gender-btn.active {
+    background: linear-gradient(135deg, var(--accent1), var(--accent2));
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 0 20px rgba(56,189,248,0.3);
+  }
+
+  .result-row {
+    display: flex; align-items: flex-start;
+    justify-content: space-between; gap: 20px; flex-wrap: wrap;
+  }
+  .bmi-value { font-size: 72px; font-weight: 900; font-family: 'DM Mono', monospace; line-height: 1; }
+  .bmi-label-sub { font-size: 11px; color: var(--muted); letter-spacing: 0.1em; margin-bottom: 4px; }
+  .bmi-badge {
+    display: inline-block; margin-top: 10px;
+    border-radius: 20px; padding: 4px 16px;
+    font-size: 13px; font-weight: 700;
+    border: 1px solid currentColor;
+  }
+
+  .gauge-wrap { flex: 1; min-width: 220px; }
+  .gauge-track {
+    position: relative; height: 12px;
+    border-radius: 99px; overflow: hidden;
+    background: rgba(10,15,30,0.9);
+    margin-bottom: 6px;
+  }
+  .gauge-fill {
+    position: absolute; left: 0; top: 0; height: 100%;
+    border-radius: 99px;
+    transition: width 0.9s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .gauge-tick {
+    position: absolute; top: 0; height: 100%;
+    width: 2px; background: rgba(10,15,30,0.7);
+  }
+  .gauge-labels {
+    display: flex; justify-content: space-between;
+    font-size: 10px; color: var(--muted);
+    font-family: 'DM Mono', monospace;
+  }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+  .chip {
+    background: rgba(10,15,30,0.9);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 12px;
+  }
+  .chip span { color: var(--muted); }
+  .chip strong { margin-left: 6px; font-family: 'DM Mono', monospace; }
+
+  .chart-title {
+    font-size: 13px; font-weight: 700; color: #94a3b8;
+    margin-bottom: 4px;
+  }
+  .chart-source { font-size: 11px; color: var(--muted); margin-bottom: 16px; }
+  .chart-wrap { position: relative; height: 230px; }
+
+  .bmi-table { display: flex; flex-direction: column; gap: 7px; }
+  .bmi-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 9px 14px; border-radius: 10px;
+    border: 1px solid transparent;
+    transition: all 0.3s;
+  }
+  .bmi-row.active { border-color: rgba(255,255,255,0.15); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .bmi-row-label { flex: 1; font-size: 14px; }
+  .bmi-row-range {
+    font-size: 12px; color: var(--muted);
+    font-family: 'DM Mono', monospace;
+  }
+
+  .empty {
+    text-align: center; padding: 48px 0;
+    color: var(--muted); font-size: 14px;
+  }
+  .empty-icon { font-size: 52px; margin-bottom: 12px; }
+
+  .result-section { display: none; }
+  .result-section.visible {
+    display: block;
+    animation: fadeUp 0.45s ease;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (max-width: 500px) {
+    .input-grid { grid-template-columns: 1fr; }
+    .result-row { flex-direction: column; }
+    .bmi-value { font-size: 56px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="header-sub">Body Mass Index Calculator</div>
+    <h1>BMI 体型チェッカー</h1>
+    <p>性別・年代別の日本人平均と比較できます</p>
+  </div>
+
+  <div class="card">
+    <div class="input-grid">
+      <div class="form-group">
+        <label>身長 (cm)</label>
+        <input type="number" id="height" placeholder="例: 170" min="100" max="220" oninput="calc()">
+      </div>
+      <div class="form-group">
+        <label>体重 (kg)</label>
+        <input type="number" id="weight" placeholder="例: 65" min="20" max="200" oninput="calc()">
+      </div>
+    </div>
+    <div class="input-grid">
+      <div class="form-group">
+        <label>性別</label>
+        <div class="gender-row">
+          <button class="gender-btn active" id="btn-male" onclick="setGender('male')">男性</button>
+          <button class="gender-btn" id="btn-female" onclick="setGender('female')">女性</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>年代</label>
+        <select id="ageGroup" onchange="calc()">
+          <option value="20代">20代</option>
+          <option value="30代" selected>30代</option>
+          <option value="40代">40代</option>
+          <option value="50代">50代</option>
+          <option value="60代">60代</option>
+          <option value="70代以上">70代以上</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div id="empty-state" class="card">
+    <div class="empty">
+      <div class="empty-icon">📏</div>
+      <div>身長と体重を入力してください</div>
+    </div>
+  </div>
+
+  <div id="result-section" class="result-section">
+
+    <div class="card" id="result-card">
+      <div class="result-row">
+        <div>
+          <div class="bmi-label-sub">あなたのBMI</div>
+          <div class="bmi-value" id="bmi-value">--</div>
+          <div><span class="bmi-badge" id="bmi-badge">--</span></div>
+        </div>
+        <div class="gauge-wrap">
+          <div class="gauge-track">
+            <div class="gauge-fill" id="gauge-fill"></div>
+            <div class="gauge-tick" style="left: 46.25%"></div>
+            <div class="gauge-tick" style="left: 62.5%"></div>
+            <div class="gauge-tick" style="left: 75%"></div>
+            <div class="gauge-tick" style="left: 87.5%"></div>
+          </div>
+          <div class="gauge-labels">
+            <span>0</span><span>18.5</span><span>25</span><span>30</span><span>35</span><span>40+</span>
+          </div>
+          <div class="chips" id="chips"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="chart-title" id="chart-title">📊 年代別 平均BMI比較</div>
+      <div class="chart-source">出典: 厚生労働省 国民健康・栄養調査</div>
+      <div class="chart-wrap">
+        <canvas id="barChart"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="chart-title" style="margin-bottom:14px">📋 BMI 判定基準（日本肥満学会）</div>
+      <div class="bmi-table" id="bmi-table"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const AVG_BMI = {
+  male:   { "20代": 22.6, "30代": 23.8, "40代": 24.0, "50代": 23.9, "60代": 23.5, "70代以上": 23.0 },
+  female: { "20代": 20.7, "30代": 21.2, "40代": 22.0, "50代": 22.8, "60代": 23.2, "70代以上": 23.0 },
+};
+
+const CATEGORIES = [
+  { label: "低体重",   min: 0,    max: 18.5, color: "#60a5fa" },
+  { label: "普通体重", min: 18.5, max: 25.0, color: "#34d399" },
+  { label: "肥満1度", min: 25.0, max: 30.0, color: "#fbbf24" },
+  { label: "肥満2度", min: 30.0, max: 35.0, color: "#f97316" },
+  { label: "肥満3度", min: 35.0, max: 99,   color: "#ef4444" },
+];
+
+let gender = "male";
+let barChart = null;
+
+function setGender(g) {
+  gender = g;
+  document.getElementById("btn-male").classList.toggle("active", g === "male");
+  document.getElementById("btn-female").classList.toggle("active", g === "female");
+  calc();
+}
+
+function getCategory(bmi) {
+  return CATEGORIES.find(c => bmi >= c.min && bmi < c.max) || CATEGORIES[CATEGORIES.length - 1];
+}
+
+function calc() {
+  const h = parseFloat(document.getElementById("height").value);
+  const w = parseFloat(document.getElementById("weight").value);
+  const ageGroup = document.getElementById("ageGroup").value;
+
+  if (!h || !w || h < 100 || w < 20) {
+    document.getElementById("empty-state").style.display = "block";
+    document.getElementById("result-section").classList.remove("visible");
+    return;
+  }
+
+  const bmi = parseFloat((w / ((h / 100) ** 2)).toFixed(1));
+  const cat = getCategory(bmi);
+  const avgData = AVG_BMI[gender];
+  const avg = avgData[ageGroup];
+  const idealW = (22 * (h / 100) ** 2).toFixed(1);
+  const diff = (bmi - avg).toFixed(1);
+
+  document.getElementById("empty-state").style.display = "none";
+  const rs = document.getElementById("result-section");
+  rs.classList.remove("visible");
+  void rs.offsetWidth;
+  rs.classList.add("visible");
+
+  document.getElementById("bmi-value").textContent = bmi;
+  document.getElementById("bmi-value").style.color = cat.color;
+  const badge = document.getElementById("bmi-badge");
+  badge.textContent = cat.label;
+  badge.style.color = cat.color;
+  badge.style.borderColor = cat.color;
+  badge.style.background = cat.color + "22";
+
+  document.getElementById("result-card").style.borderColor = cat.color + "44";
+  document.getElementById("result-card").style.boxShadow = `0 0 30px ${cat.color}18`;
+
+  const pct = Math.min((Math.min(bmi, 40) / 40) * 100, 100);
+  const fill = document.getElementById("gauge-fill");
+  fill.style.width = pct + "%";
+  fill.style.background = `linear-gradient(90deg, #60a5fa, ${cat.color})`;
+
+  const diffColor = Math.abs(bmi - avg) < 1 ? "#34d399" : "#fbbf24";
+  document.getElementById("chips").innerHTML = `
+    <div class="chip"><span>理想体重（BMI22）</span><strong style="color:#34d399">${idealW} kg</strong></div>
+    <div class="chip"><span>${gender === "male" ? "男性" : "女性"}${ageGroup}平均</span><strong style="color:#818cf8">${avg}</strong></div>
+    <div class="chip"><span>平均との差</span><strong style="color:${diffColor}">${diff > 0 ? "+" : ""}${diff}</strong></div>
+  `;
+
+  document.getElementById("chart-title").textContent =
+    `📊 年代別 平均BMI比較（${gender === "male" ? "男性" : "女性"}）`;
+
+  const ages = Object.keys(avgData);
+  const avgVals = ages.map(a => avgData[a]);
+  const myVals = ages.map(a => a === ageGroup ? bmi : null);
+  const barColors = ages.map(a => a === ageGroup ? "#818cf8" : "#1e2d50");
+
+  if (barChart) barChart.destroy();
+
+  const ctx = document.getElementById("barChart").getContext("2d");
+  barChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: ages,
+      datasets: [
+        {
+          label: "日本人平均BMI",
+          data: avgVals,
+          backgroundColor: barColors,
+          borderRadius: 5,
+          borderSkipped: false,
+        },
+        {
+          label: "あなた",
+          data: myVals,
+          backgroundColor: cat.color,
+          borderRadius: 5,
+          borderSkipped: false,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          labels: { color: "#94a3b8", font: { family: "'Noto Sans JP'", size: 12 }, boxWidth: 12 }
+        },
+        tooltip: {
+          backgroundColor: "#1e293b",
+          borderColor: "#334155",
+          borderWidth: 1,
+          titleColor: "#94a3b8",
+          bodyColor: "#e2e8f0",
+          callbacks: {
+            label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(1)}`
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { color: "#64748b", font: { family: "'Noto Sans JP'" } },
+          border: { display: false }
+        },
+        y: {
+          min: 17, max: 27,
+          grid: { color: "#1e2d50" },
+          ticks: { color: "#64748b", font: { family: "'DM Mono'" } },
+          border: { display: false }
+        }
+      },
+      animation: { duration: 700, easing: "easeOutQuart" }
+    }
+  });
+
+  const origDraw = barChart.draw.bind(barChart);
+  barChart.draw = function() {
+    origDraw();
+    const chartArea = barChart.chartArea;
+    const yScale = barChart.scales.y;
+    const ctx2 = barChart.ctx;
+    [{ v: 18.5, c: "#60a5fa" }, { v: 25, c: "#fbbf24" }].forEach(({ v, c }) => {
+      const y = yScale.getPixelForValue(v);
+      ctx2.save();
+      ctx2.beginPath();
+      ctx2.setLineDash([5, 5]);
+      ctx2.strokeStyle = c + "55";
+      ctx2.lineWidth = 1.5;
+      ctx2.moveTo(chartArea.left, y);
+      ctx2.lineTo(chartArea.right, y);
+      ctx2.stroke();
+      ctx2.restore();
+    });
+  };
+  barChart.draw();
+
+  const tableEl = document.getElementById("bmi-table");
+  tableEl.innerHTML = CATEGORIES.map(c => {
+    const isActive = cat.label === c.label;
+    const rangeStr = c.max >= 99 ? `${c.min} 以上` : `${c.min} 〜 ${c.max}`;
+    return `
+      <div class="bmi-row${isActive ? " active" : ""}"
+           style="${isActive ? `background:${c.color}15; border-color:${c.color}44` : ""}">
+        <div class="dot" style="background:${c.color}"></div>
+        <div class="bmi-row-label" style="${isActive ? `color:${c.color}; font-weight:700` : ""}">${c.label}</div>
+        <div class="bmi-row-range">${rangeStr}</div>
+      </div>
+    `;
+  }).join("");
+}
+</script>
+</body>
+</html>

@@ -4,7 +4,8 @@
 
 ## デモ
 
-https://masahiro-ikezaki.github.io/BloodPressure/
+- **血圧・脈拍管理アプリ**: https://masahiro-ikezaki.github.io/BloodPressure/
+- **BMI 体型チェッカー**: https://masahiro-ikezaki.github.io/BloodPressure/bmi-checker.html
 
 ## 機能
 
@@ -15,11 +16,32 @@ https://masahiro-ikezaki.github.io/BloodPressure/
 - **バックアップ**: JSONエクスポート/インポート
 - **マルチユーザー**: 2〜3名を切り替えて管理
 
+## ファイル構成
+
+| ファイル | 説明 |
+|---|---|
+| `index.html` | 血圧・脈拍管理アプリ |
+| `bmi-checker.html` | BMI 体型チェッカー |
+
 ## 使い方
 
-`index.html` をブラウザで開くだけで動作します。
+各HTMLファイルをブラウザで開くだけで動作します。
 
 GitHub Pages でホスティングする場合は、リポジトリの Settings → Pages から有効化してください。
+
+---
+
+## BMI 体型チェッカー（bmi-checker.html）
+
+### 機能
+
+- **BMI計算**: 身長・体重からBMIをリアルタイム計算
+- **判定表示**: 低体重〜肥満3度をカラーで表示、ゲージバー付き
+- **平均比較**: 性別・年代別の日本人平均BMI（厚生労働省データ）と比較
+- **棒グラフ**: 年代別平均BMIをChart.jsで可視化
+- **理想体重**: BMI22 基準の理想体重を自動算出
+
+---
 
 ## 技術スタック
 

@@ -350,6 +350,32 @@ body {
 }
 .toast.show { opacity: 1; }
 
+/* バックアップ警告バナー */
+.backup-banner {
+  display: none;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  margin: 8px 16px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: #856404;
+  align-items: center;
+  gap: 8px;
+}
+.backup-banner.show { display: flex; }
+.backup-banner span { flex: 1; }
+.backup-banner button {
+  background: #ffc107;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 /* BP値の色分け */
 .bp-normal { color: var(--success); }
 .bp-high { color: var(--warning); }
@@ -379,6 +405,12 @@ body {
 
 <!-- トースト -->
 <div class="toast" id="toast"></div>
+
+<!-- バックアップ警告バナー -->
+<div class="backup-banner" id="backupBanner">
+  <span id="backupBannerMsg">⚠️ しばらくバックアップしていません</span>
+  <button id="backupBannerBtn">今すぐバックアップ</button>
+</div>
 
 <!-- コンテンツ -->
 <main class="content">
@@ -554,6 +586,20 @@ body {
   </div>
 </div>
 
+<!-- バックアップ促進モーダル -->
+<div class="modal-overlay" id="backupReminderModal">
+  <div class="modal">
+    <h3>💾 バックアップのすすめ</h3>
+    <p style="color:var(--text-light);font-size:14px;line-height:1.6" id="backupReminderMsg">
+      新しい記録が5件追加されました。<br>スマホのブラウザはデータが消えることがあります。バックアップを取っておきましょう。
+    </p>
+    <div class="modal-actions">
+      <button class="cancel" id="backupReminderSkip">後で</button>
+      <button class="confirm" id="backupReminderExport">今すぐバックアップ</button>
+    </div>
+  </div>
+</div>
+
 <!-- 削除確認モーダル -->
 <div class="modal-overlay" id="deleteModal">
   <div class="modal">
@@ -569,6 +615,9 @@ body {
 <script>
 // データ管理
 const STORAGE_KEY = 'bp-app-data';
+const BACKUP_TRACK_KEY = 'bp-backup-track';
+const BACKUP_REMINDER_INTERVAL = 5; // 何件ごとに通知するか
+const BACKUP_WARNING_DAYS = 7; // 何日バックアップしていないと警告するか
 const DEFAULT_COLORS = ['#667eea', '#ed8936', '#38a169', '#e53e3e'];
 
 function loadData() {
@@ -581,6 +630,68 @@ function loadData() {
 
 function saveData(data) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+// バックアップ追跡
+function loadBackupTrack() {
+  try {
+    const raw = localStorage.getItem(BACKUP_TRACK_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return { lastBackupDate: null, recordsSinceBackup: 0 };
+}
+
+function saveBackupTrack(track) {
+  localStorage.setItem(BACKUP_TRACK_KEY, JSON.stringify(track));
+}
+
+function resetBackupTrack() {
+  saveBackupTrack({ lastBackupDate: new Date().toISOString(), recordsSinceBackup: 0 });
+  document.getElementById('backupBanner').classList.remove('show');
+}
+
+function incrementBackupCounter() {
+  const track = loadBackupTrack();
+  track.recordsSinceBackup = (track.recordsSinceBackup || 0) + 1;
+  saveBackupTrack(track);
+  if (track.recordsSinceBackup >= BACKUP_REMINDER_INTERVAL) {
+    showBackupReminderModal(track.recordsSinceBackup);
+  }
+}
+
+function checkBackupOnStartup() {
+  const track = loadBackupTrack();
+  if (!track.lastBackupDate && appData.records.length === 0) return;
+  const daysSince = track.lastBackupDate
+    ? (Date.now() - new Date(track.lastBackupDate).getTime()) / (1000 * 60 * 60 * 24)
+    : Infinity;
+  if (daysSince >= BACKUP_WARNING_DAYS && appData.records.length > 0) {
+    const days = isFinite(daysSince) ? `${Math.floor(daysSince)}日間` : '';
+    const msg = days
+      ? `⚠️ ${days}バックアップしていません`
+      : '⚠️ まだバックアップしていません';
+    document.getElementById('backupBannerMsg').textContent = msg;
+    document.getElementById('backupBanner').classList.add('show');
+  }
+}
+
+function showBackupReminderModal(count) {
+  document.getElementById('backupReminderMsg').innerHTML =
+    `新しい記録が${count}件追加されました。<br>スマホのブラウザはデータが消えることがあります。バックアップを取っておきましょう。`;
+  document.getElementById('backupReminderModal').classList.add('show');
+}
+
+function doBackupExport() {
+  const json = JSON.stringify(appData, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `bp-backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  resetBackupTrack();
+  showToast('バックアップをダウンロードしました');
 }
 
 function generateId(prefix) {
@@ -714,6 +825,7 @@ document.getElementById('btnRecord').addEventListener('click', () => {
 
   appData.records.push(record);
   saveData(appData);
+  incrementBackupCounter();
 
   // フォームリセット
   document.getElementById('inputSystolic').value = '';
@@ -1080,16 +1192,18 @@ function deleteUser(id) {
 }
 
 // JSONエクスポート
-document.getElementById('btnExportJson').addEventListener('click', () => {
-  const json = JSON.stringify(appData, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `bp-backup_${new Date().toISOString().slice(0,10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-  showToast('バックアップをダウンロードしました');
+document.getElementById('btnExportJson').addEventListener('click', doBackupExport);
+
+// バックアップバナーボタン
+document.getElementById('backupBannerBtn').addEventListener('click', doBackupExport);
+
+// バックアップ促進モーダルボタン
+document.getElementById('backupReminderExport').addEventListener('click', () => {
+  document.getElementById('backupReminderModal').classList.remove('show');
+  doBackupExport();
+});
+document.getElementById('backupReminderSkip').addEventListener('click', () => {
+  document.getElementById('backupReminderModal').classList.remove('show');
 });
 
 // JSONインポート
@@ -1135,6 +1249,7 @@ function refreshAll() {
 // 初期表示
 updateUserSelect();
 showRecentRecord();
+checkBackupOnStartup();
 </script>
 </body>
 </html>
